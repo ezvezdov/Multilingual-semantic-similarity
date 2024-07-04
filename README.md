@@ -1,5 +1,5 @@
 My project at CTU FEE on theme
-# Multilingual semantic similarity [\[PDF\]](Multilingual%20semantic%20similarity.pdf)
+# Multilingual semantic similarity \[[PDF](Multilingual%20semantic%20similarity.pdf)\]
 
 **Abstract**
  
