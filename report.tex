@@ -1,0 +1,381 @@
+\documentclass{article}
+
+% Language setting
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{ifluatex}
+\ifluatex
+  \usepackage{pdftexcmds}
+  \makeatletter
+  \let\pdfstrcmp\pdf@strcmp
+  \let\pdffilemoddate\pdf@filemoddate
+  \makeatother
+\fi
+\usepackage{xcolor}
+\usepackage{svg}
+\svgsetup{
+    inkscape=pdf,
+    inkscapeexe={/usr/bin/inkscape -z -C}
+}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{listings}
+\usepackage{float}   % for H placement specifier
+\usepackage{multirow}
+
+
+
+\definecolor{light-gray}{gray}{0.95}
+\definecolor{lightgray}{gray}{0.9}
+
+
+
+
+\title{Multilingual semantic similarity}
+\author{Yauheni Zviazdou \\ Czech Institute of Informatics, Robotics and Cybernetics, Czech Technical University \\ zviazyau@fel.cvut.cz, ezvezdov22@gmail.com}
+\date{\today}
+
+
+
+\begin{document}
+\maketitle
+
+\textbf{Abstract} In certain foreign languages, a common issue arises when individuals incorrectly write words by omitting diacritics or altering letters.
+This problem is prevalent in social media, chatbots, and other informal written communications.
+As a result, embedding models face challenges in comprehending text without diacritics (hereinafter diacriticless).
+A potential solution involves adapting data representation to accommodate both formal and informal styles of writing.
+The objective of this study is to assess the quality of diacriticless models.
+
+
+\section{Introduction}
+This study relies on a corpus in the Czech language.
+
+\subsection{Problem explanation}
+
+\noindent Usual changes in informal texts 
+\begin{enumerate}
+  \item acute: á $\vert$ é $\vert$ í $\vert$ ó $\vert$ ú $\vert$ ý $\rightarrow$ a $\vert$ e $\vert$ i $\vert$ o $\vert$ u $\vert$ y
+  \item caron: č $\vert$ ď $\vert$ ě $\vert$ ň $\vert$ ř $\vert$ š $\vert$ ť $\vert$ ž $\rightarrow$ c $\vert$ d $\vert$ e $\vert$ n $\vert$ r $\vert$ s $\vert$ t $\vert$ z
+  \item overring: ů $\rightarrow$ u
+\end{enumerate}
+
+\noindent Due to the absence of diacritics, the meanings of words may be compromised:
+
+\begin{itemize}
+  \item byt (apartment) - být (to be)
+  \item rád (to be glad) - řad (row or a line) - řád (order, religious order)
+  \item krize (crisis) - kříže (crosses)
+\end{itemize}
+
+\subsection{Datasets}
+
+The corpus constitutes a segment of a preprocessed Common Crawl repository, which encompasses raw data from web pages, as well as metadata and text extractions.
+Given the nature of this dataset, it is expected to include misspellings and text lacking diacritics.
+
+
+\subsubsection{Text preprocessing procedure}
+\begin{enumerate}
+  \item Eliminating duplicate entries.
+  \item Filtering out lines containing fewer than 9 characters.
+  \item Excluding URLs.
+  \item Breaking lines into individual sentences.
+  \item Converting all text to lowercase.
+  \item Removing lines containing words exceeding 30 characters.
+  \item Excluding HTML tags with less than 100 characters.
+  \item Removing lines surpassing 500 characters.
+  \item Omitting words longer than 21 characters.
+\end{enumerate}
+
+\hfill \break
+
+\subsubsection{Data Conversion}
+Initially, we need to generate a diacritic-free corpus.
+Before diacritic removal, I convert all characters to lowercase (to handle non-preprocessed text), thus establishing the sequence
+
+\centerline{ \textit{original text} $\rightarrow$ \textit{lowercase text} $\rightarrow$ \textit{diacriticless text} }
+
+\newblock
+
+\begin{lstlisting}[language=bash,basicstyle=\small\ttfamily, frame=single, caption={Script for removing diacritics using Unix utilities}, captionpos=b, label={lst:diacriticless.sh},backgroundcolor=\color{light-gray}] 
+sed 's/.*/\L&/' "$1" | iconv -f utf-8 -t ascii//TRANSLIT > diacriticless/"$1" \end{lstlisting}
+
+\newblock
+
+By employing the Script \ref{lst:diacriticless.sh}, two datasets are generated:
+
+\begin{itemize}
+\item Diacritics - text with diacritics
+\item Diacriticless - text without diacritics
+\end{itemize}
+
+
+
+\subsubsection{Preprocessed corpus summary}
+\begin{itemize}
+  \item The corpus contains 3.87 billion words.
+  \item The diacritics model has 800K words in the dictionary.
+  \item The diacriticless model has 762K words in the dictionary.
+\end{itemize}
+
+
+
+\subsection{Embedding model library}
+For training models in this research, I will utilize the FastText.cc library  \cite{bojanowski2016enriching}.
+
+The parameters for training are
+\begin{itemize}
+  \item Word representation: \textbf{Word2vec}
+  \item Vector size: \textbf{300}
+  \item Loss: \textbf{Negative sampling loss}
+  \item Dictionary threshold (the frequency of the word to be included in the dictionary): \textbf{130}
+\end{itemize}
+  
+
+\subsection{Metric}
+
+
+\subsubsection[]{Analogies \cite{embedding_evaluator_paper}}
+
+The metric enables the comparison of the accuracy of word analogies produced by the embedding model.
+The metric comprises 22,256 tests across 12 categories, as indicated in Table \ref{embedding_evaluator_info}.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ |p{4.66cm}|p{2.6cm}|  }
+    \hline
+    Category                      & Number of tests \\
+    \hline
+    Antonyms-nouns                & 1406            \\
+    antonyms-adjectives           & 1722            \\
+    antonyms-verbs                & 1120            \\
+    state-presidents              & 1122            \\
+    states-cities                 & 1122            \\
+    family-relations              & 810             \\
+    nouns-plural                  & 1332            \\
+    jobs                          & 1188            \\
+    verb-past                     & 8928            \\
+    pronouns                      & 756             \\
+    antonyms-adjectives,gradation & 1560            \\
+    nationalities                 & 1190            \\
+    \hline
+    \hline
+    All                           & 22256           \\ 
+    \hline
+  \end{tabular}
+  \caption{Information about Analogies tests}
+  \label{embedding_evaluator_info}
+\end{table}
+
+\newpage
+
+The metric results include:
+\begin{itemize}
+  \item \textbf{Total accuracy}, which represents the percentage of passed tests.
+  \item \textbf{Semantic similarity}, measuring how similar words are in meaning.
+  \item \textbf{Syntactic accuracy}, indicating the degree to which a piece of text adheres to the grammatical rules of a language.
+  \end{itemize}
+
+\subsubsection[]{UPV FAQ \cite{upv_faq}}
+The metric estimates the percentage of correctly answered questions in the test set.
+These tests are comprised of frequently asked questions (FAQs) from the Industrial Property Office of the Czech Republic, organized into four distinct groups, as detailed in Table \ref{UPV_FAQ_info}.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ |p{2cm}||p{2.5cm}| }
+    \hline
+    Tests set & Number of tests \\
+    \hline
+    FAQv5     & 2054            \\
+    FAQ50     & 561             \\
+    FAQ76     & 2025            \\
+    FAQ76v2   & 1965            \\
+    \hline
+    \hline
+    All       & 6605            \\
+    \hline
+  \end{tabular}
+  \caption{Information about UPV FAQ tests}
+  \label{UPV_FAQ_info}
+\end{table}
+
+
+
+\section{Testing}
+
+\subsection{Baseline}
+
+Table \ref{testing_diacritics_diacriticless} displays the outcomes of assessing the original (diacritics) model on text lacking diacritics.
+The results indicate a less satisfactory performance; however, we will juxtapose them with the original results in the subsequent analysis.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ |p{4.5cm}||p{2.5cm}| }
+    \hline
+    Category                     & Tests passed, \% \\
+    \hline
+    Analogies Total accuracy     & 35.30            \\
+    Analogies Semantic accuracy  & 4.20             \\
+    Analogies Syntactic accuracy & 32.42            \\
+    \hline
+    \hline
+    Question matching accuracy   & 81.10            \\
+    Answer matching accuracy     & 29.23            \\
+    \hline
+  \end{tabular}
+  \caption{Testing diacritics model on diacriticless tests.}
+  \label{testing_diacritics_diacriticless}
+\end{table}
+
+\newpage
+
+\subsection{Testing diacriticless model on diacritics tests}
+
+Table \ref{testing_diacriticless_diacritics} indicates that the results fall below the baseline.
+This is because conducting training and testing on distinct types of data is not meaningful.
+The word vectors are formed using word subwords, and when diacritics are removed, these vectors differ significantly from the original ones.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ |p{4.5cm}||p{2.5cm}| }
+    \hline
+    Category                     & Tests passed, \% \\
+    \hline
+    Analogies Total accuracy     & 17.84            \\
+    Analogies Semantic accuracy  & 2.75             \\
+    Analogies Syntactic accuracy & 16.12            \\
+    \hline
+    \hline
+    Question matching accuracy   & 83.31            \\
+    Answer matching accuracy     & 28.64            \\
+    \hline
+  \end{tabular}
+  \caption{Testing diacriticless model on diacritics tests.}
+  \label{testing_diacriticless_diacritics}
+\end{table}
+
+\textbf{Conclusion} To enhance performance, it is recommended to employ diacriticless tests for evaluating the diacriticless model and tests with correctly spelled diacritics for assessing the diacritics model.
+
+
+
+\subsection{Testing on the same data type as model}
+
+\subsubsection{Analogies metric}
+
+\begin{table}[h]
+  \centering  
+  \begin{tabular}{ |p{4.66cm}||p{2cm}|p{2.4cm}|p{2.1cm}| }
+    \hline
+    Category                      & Diacritics, \% & Diacriticless, \% & Difference, \%     \\
+    \hline
+    Antonyms-nouns                & 10.60          & 9.96              & $\downarrow$ 0.64  \\
+    antonyms-adjectives           & 8.07           & 7.78              & $\downarrow$ 0.29  \\
+    antonyms-verbs                & 7.41           & 6.88              & $\downarrow$ 0.53  \\
+    state-presidents              & 0.00           & 0.00              & -- 0.00            \\
+    states-cities                 & 9.45           & 7.49              & $\downarrow$ 1.96  \\
+    family-relations              & 25.68          & 24.32             & $\downarrow$ 1.36  \\
+    nouns-plural                  & 69.60          & 69.37             & $\downarrow$ 0.23  \\
+    jobs                          & 88.81          & 77.86             & $\downarrow$ 10.95 \\
+    verb-past                     & 81.30          & 78.72             & $\downarrow$ 2.58  \\
+    pronouns                      & 11.91          & 11.11             & $\downarrow$ 0.80  \\
+    antonyms-adjectives,gradation & 87.50          & 87.50             & -- 0.00            \\
+    nationalities                 & 42.61          & 36.47             & $\downarrow$ 6.14  \\
+    \hline
+    \hline
+    All                           & 53.41          & 51.19             & $\downarrow$ 2.22  \\ 
+    \hline
+  \end{tabular}
+  \caption{Detailed results of Analogies metric on dataset}
+  \label{embedding_evaluator_detailed}
+\end{table}
+
+
+Table \ref{embedding_evaluator_detailed} reveals that the \textit{Jobs} and \textit{Nationalities} categories exhibit the most substantial differences.
+These categories adhere to the following format:
+
+\centerline{ \textit{noun masculine} -- \textit{noun feminine} $\rightarrow$ \textit{noun2 masculine} -- \textit{?} }
+
+The big gap between the diacritics and diacriticless model may be due to the big similarity of the masculine and feminine noun variants in the Czech language, for example \textit{Lékař} (doctor, masculine) and \textit{Lékař\textbf{ka}} (doctor, feminine)
+
+\subsubsection{UPV FAQ metric}
+
+Results from Table \ref{UPV_FAQ_detailed} are almost the same as Baseline.
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ |p{1.9cm}||p{2cm}|p{2.4cm}|p{2.1cm}||p{2.1cm}|p{2.4cm}|p{2.1cm}|  }
+    \hline
+    \multirow{1}{*}{} & \multicolumn{3}{c||}{Question matching accuracy} & \multicolumn{3}{c|}{Answer matching accuracy} \\
+    \hline
+    \hline
+    Tests set & Diacritics, \% & Diacriticless, \% & Difference, \%    & Diacritics, \% & Diacriticless, \% & Difference, \%    \\
+    \hline
+    FAQv5     & 83.11          & 83.65             & $\uparrow$ 0.54   & 21.27          & 22.92             & $\uparrow$ 1.65   \\
+    FAQ50     & 88.61          & 88.26             & $\downarrow$ 0.35 & 27.05          & 30.25             & $\uparrow$ 3.2    \\
+    FAQ76     & 79.66          & 79.96             & $\uparrow$ 0.30   & 33.46          & 33.51             & $\uparrow$ 0.05   \\
+    FAQ76v2   & 80.77          & 80.93             & $\uparrow$ 0.16   & 34.18          & 34.13             & $\downarrow$ 0.05 \\
+    \hline
+    All       & 83.04          & 83.20             & $\uparrow$ 0.16   & 28.99          & 30.20             & $\uparrow$ 1.21   \\
+    \hline
+  \end{tabular}
+  \caption{Detailed results of UPV FAQ metric on dataset}
+  \label{UPV_FAQ_detailed}
+\end{table}
+
+\subsection{Comparison}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ |p{4.5cm}||p{2cm}|p{2.4cm}|p{2.1cm}|  }
+    \hline
+    Category                     & Diacritics, \% & Diacriticless, \% & Difference, \%    \\
+    \hline
+    Analogies Total accuracy     & 53.41          & 51.19             & $\downarrow$ 2.22 \\
+    Analogies Semantic accuracy  & 10.20          & 9.40              & $\downarrow$ 0.80 \\
+    Analogies Syntactic accuracy & 63.61          & 60.17             & $\downarrow$ 3.44 \\
+    \hline                    
+    Question matching accuracy   & 83.04          & 83.20             & $\uparrow$ 0.16   \\
+    Answer matching accuracy     & 28.99          & 30.20             & $\uparrow$ 1.21   \\
+    \hline
+  \end{tabular}
+  \caption{Total testing results on dataset}
+  \label{Comparison}  
+\end{table}
+
+
+Table \ref{Comparison} illustrates that both models perform better than the baseline.
+The diacriticless model exhibits slightly lower results in analogy tests, but it excels in Q\&A matching quality.
+
+\section{Conclusion} 
+The Diacriticless dataset is suitable for training an embedding model.
+Therefore, there are two potential solutions to the problem.
+
+\begin{enumerate}
+  \item Apply algorithms to reintroduce diacritics to diacriticless or misspelled text, and then utilize the diacritics model. \newline
+  \centerline{ \textit{Text correction} $\rightarrow$ \textit{Text processing} } \newline 
+  \textbf{Disadvantages}
+  \begin{itemize}
+    \item Worse Q\&A matching performances.
+    \item The corpus containing diacritics requires more storage space compared to the Diacriticless corpus.
+  \end{itemize} 
+  
+  \item Eliminate all diacritics from the text and employ the diacriticless model. Subsequently, apply an algorithm to the model's output to reintroduce diacritics. \newline
+  \centerline{ \textit{Removing diacritics} $\rightarrow$ \textit{Text processing} $\rightarrow$ \textit{Adding diacritics} } \newline
+  \textbf{Disadvantages}
+  \begin{itemize}
+    \item Worse performances in analogies tests.
+    \item The requirement to employ two algorithms for text processing.
+  \end{itemize} 
+\end{enumerate}
+
+\bibliographystyle{plain}
+\bibliography{references.bib}
+
+\nocite{fastText_website}
+
+\end{document}
